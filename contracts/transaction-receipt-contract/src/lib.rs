@@ -24,6 +24,16 @@ pub const ALLOWED_SOURCES: [&str; 7] = [
     "manual_admin",
 ];
 
+/// Allowed transaction types for MVP
+pub const ALLOWED_TX_TYPES: [&str; 6] = [
+    "TENANT_REPAYMENT",
+    "LANDLORD_PAYOUT", 
+    "WHISTLEBLOWER_REWARD",
+    "STAKE",
+    "UNSTAKE",
+    "STAKE_REWARD_CLAIM",
+];
+
 /// Input parameters for recording a receipt (to avoid 10-parameter limit)
 #[contracttype]
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -118,7 +128,7 @@ pub enum ContractError {
     /// Caller is not authorized for this operation
     NotAuthorized = 2,
     /// Contract is currently paused
-    ContractPaused = 3,
+    Paused = 3,
     /// Transaction ID already exists (duplicate)
     DuplicateTransaction = 4,
     /// Amount is invalid (zero or negative)
@@ -129,6 +139,8 @@ pub enum ContractError {
     InvalidExternalRef = 7,
     /// Timestamp is invalid
     InvalidTimestamp = 8,
+    /// Transaction type is not in allowed list
+    InvalidTxType = 9,
 }
 
 #[contract]
@@ -301,6 +313,9 @@ impl TransactionReceiptContract {
             return Err(ContractError::InvalidAmount);
         }
 
+        // Validate tx_type is in allowed list
+        validate_tx_type(&input.tx_type)?;
+
         // Generate tx_id from canonical external reference
         let tx_id = generate_tx_id(&env, &input.external_ref_source, &input.external_ref)?;
 
@@ -353,7 +368,14 @@ impl TransactionReceiptContract {
             .set(&deal_count_key, &(current_count + 1));
 
         // Emit event with topic ("receipt", tx_id) and receipt payload
-        env.events().publish(("receipt", tx_id.clone()), receipt);
+        env.events().publish(
+            (
+                Symbol::new(&env, "transaction_receipt"),
+                Symbol::new(&env, "receipt_recorded"),
+                tx_id.clone(),
+            ),
+            receipt,
+        );
 
         Ok(tx_id)
     }
@@ -494,7 +516,7 @@ fn require_operator(env: &soroban_sdk::Env, caller: &Address) -> Result<(), Cont
 ///
 /// # Returns
 /// * `Ok(())` - If the contract is not paused
-/// * `Err(ContractError::ContractPaused)` - If the contract is paused
+/// * `Err(ContractError::Paused)` - If the contract is paused
 fn require_not_paused(env: &soroban_sdk::Env) -> Result<(), ContractError> {
     // Load paused state from storage (defaults to false if not set)
     let paused: bool = env
@@ -505,9 +527,29 @@ fn require_not_paused(env: &soroban_sdk::Env) -> Result<(), ContractError> {
 
     // Return error if contract is paused
     if paused {
-        return Err(ContractError::ContractPaused);
+        return Err(ContractError::Paused);
     }
 
+    Ok(())
+}
+
+/// Helper function to validate transaction type against allowed list
+///
+/// # Arguments
+/// * `tx_type` - The transaction type to validate
+///
+/// # Returns
+/// * `Ok(())` - If the transaction type is valid
+/// * `Err(ContractError::InvalidTxType)` - If the transaction type is not in allowed list
+fn validate_tx_type(tx_type: &Symbol) -> Result<(), ContractError> {
+    use alloc::string::ToString;
+    
+    let tx_type_str = tx_type.to_string();
+    
+    if !ALLOWED_TX_TYPES.contains(&tx_type_str.as_str()) {
+        return Err(ContractError::InvalidTxType);
+    }
+    
     Ok(())
 }
 

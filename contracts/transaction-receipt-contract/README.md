@@ -2,6 +2,8 @@
 
 This Soroban smart contract records immutable transaction receipts keyed by a deterministic transaction ID derived from an external payment reference.
 
+See `docs/specs/contracts/CONVENTIONS.md` for shared conventions (errors, events, init patterns).
+
 ## Purpose
 
 - Record canonical transaction receipts for on-chain indexing and audit.
@@ -40,6 +42,19 @@ Validation rules:
 
 The canonical string is SHA-256 hashed to produce a 32-byte `tx_id` (type `BytesN<32>`).
 
+## Transaction type validation
+
+The contract enforces strict validation on transaction types to ensure indexer consistency. Only the following transaction types are allowed for MVP:
+
+- `TENANT_REPAYMENT` - Tenant rent payments
+- `LANDLORD_PAYOUT` - Landlord payouts  
+- `WHISTLEBLOWER_REWARD` - Whistleblower rewards
+- `STAKE` - Staking operations
+- `UNSTAKE` - Unstaking operations
+- `STAKE_REWARD_CLAIM` - Staking reward claims
+
+Any transaction type not in this list will be rejected with `InvalidTxType` error (error code 9). Transaction types are case-sensitive and must match exactly.
+
 ## Metadata hash
 
 `metadata_hash` is optional and expected to be the SHA-256 hash of the canonical receipt payload (v1). The contract stores it as `BytesN<32>` if provided; generation of this hash is the caller's responsibility.
@@ -50,16 +65,17 @@ The contract exposes the following `ContractError` variants (numeric values show
 
 - `AlreadyInitialized` (1)
 - `NotAuthorized` (2)
-- `ContractPaused` (3)
+- `Paused` (3)
 - `DuplicateTransaction` (4)
 - `InvalidAmount` (5)
 - `InvalidExternalRefSource` (6)
 - `InvalidExternalRef` (7)
 - `InvalidTimestamp` (8)
+- `InvalidTxType` (9) - Transaction type not in allowed list
 
 ## Events
 
-On successful `record_receipt`, the contract emits an event with topic `("receipt", tx_id)` and the `Receipt` payload.
+On successful `record_receipt`, the contract emits an event with topic `(transaction_receipt, receipt_recorded, tx_id)` and the `Receipt` payload.
 
 ## Usage examples (testing harness)
 
