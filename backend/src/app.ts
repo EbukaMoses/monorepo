@@ -57,6 +57,7 @@ import {
   PostgresLinkedAddressStore,
 } from "./models/linkedAddressStore.js";
 import { StubRewardsDataLayer } from "./services/stub-rewards-data-layer.js";
+import { PostgresRewardsDataLayer } from "./services/postgres-rewards-data-layer.js";
 import authRouter from "./routes/auth.js";
 import { ReceiptIndexer } from "./indexer/worker.js";
 import { createReceiptsRouter } from "./routes/receiptsRoute.js";
@@ -118,6 +119,7 @@ import {
   initWhistleblowerSignupApplicationStore,
 } from "./models/whistleblowerSignupApplicationStore.js";
 import { createPartnerLandlordApplicationsRouter } from "./routes/partnerLandlordApplications.js";
+import { createApartmentReviewsRouter } from "./routes/apartmentReviews.js";
 
 import {
   sanitizeRequest,
@@ -225,7 +227,10 @@ export function createApp() {
     : new InMemoryLinkedAddressStore();
   const ngnWalletService = new NgnWalletService();
 
-  const rewardsDataLayer = new StubRewardsDataLayer();
+  // Initialize rewards data layer - use persistent implementation when DATABASE_URL is set
+  const rewardsDataLayer = process.env.DATABASE_URL
+    ? new PostgresRewardsDataLayer()
+    : new StubRewardsDataLayer();
   const earningsService = new EarningsServiceImpl(rewardsDataLayer, {
     usdcToNgnRate: 1600, // Example exchange rate: 1 USDC = 1600 NGN
   });
@@ -484,6 +489,7 @@ export function createApp() {
   app.use("/api/tenant/payments", createTenantPaymentsRouter());
   app.use("/api/notifications", createNotificationsRouter());
   app.use("/api/admin", createSettlementAdminRouter());
+  app.use("/api/apartment-reviews", createApartmentReviewsRouter());
   app.use("/api", migrationGuideRouter);
 
   // Interactive API documentation
